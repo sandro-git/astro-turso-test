@@ -1,0 +1,30 @@
+[build]
+command = "pnpm build"
+publish = "dist"
+
+[build.environment]
+NODE_VERSION = "18"
+
+# Declare environment variables that must be set
+[template.environment]
+TURSO_DATABASE_URL = "libsql://test-sandro-git.aws-eu-west-1.turso.io"
+TURSO_AUTH_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NDU5MjAzOTAsImlkIjoiYmQzZTc3NDEtZWI5OC00ZDkwLWE1MjYtZjJmZDkyYzM0NzM1IiwicmlkIjoiYjk0YWVkZDQtMjljYi00MDhhLWFkM2UtMDM0YmQ4NWVmMGI2In0.17ynoIjwXKNjFWt0KDDEeMIkTLQIJ1mWgGx5Oz6sGFxEf73C-aKL3lCF7_hxP7aMcPQ8J9zLzZ-Hk5FCDUHyDw"
+
+# Set up server-side rendering and Edge Functions
+[[edge_functions]]
+path = "/*"
+function = "entry"
+
+[functions]
+node_bundler = "esbuild"
+external_node_modules = ["@libsql/client"]
+
+# Handle redirects for client-side routing
+[[redirects]]
+from = "/*"
+to = "/.netlify/functions/entry"
+status = 200
+
+# For faster builds
+[build.processing]
+skip_processing = true
