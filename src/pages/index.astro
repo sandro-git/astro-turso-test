@@ -1,5 +1,22 @@
 ---
+// Import the database client
+import { db, initDb } from '../db/client';
+import '../styles/global.css';
 
+// Initialize the database
+await initDb();
+
+// Fetch names from the database
+let names = [];
+let fetchError = null;
+
+try {
+  const result = await db.execute('SELECT * FROM users ORDER BY ID DESC');
+  names = result.rows.map(row => ({ id: row.ID, name: row.name }));
+} catch (error) {
+  console.error('Error fetching names:', error);
+  fetchError = 'Failed to load names from the database';
+}
 ---
 
 <html lang="en">
@@ -8,9 +25,289 @@
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
+		<title>Name Submission Form</title>
 	</head>
-	<body>
-		<h1>Astro</h1>
+	<body class="bg-gray-50 text-gray-900 font-sans">
+		<div class="max-w-xl mx-auto p-4 sm:p-8">
+			<h1 class="text-2xl sm:text-3xl font-bold text-center mb-8">Name Submission Form</h1>
+			
+			<div class="bg-white rounded-lg shadow-md overflow-hidden">
+				<!-- Form Section -->
+				<div class="p-6">
+					<form id="nameForm" class="space-y-4">
+						<div>
+							<label for="nameInput" class="block text-sm font-medium mb-1">Your Name</label>
+							<input 
+								type="text" 
+								id="nameInput" 
+								name="name" 
+								placeholder="Enter your name" 
+								class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+								required
+							/>
+						</div>
+						
+						<button 
+							type="submit" 
+							id="submitButton"
+							class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md font-medium hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
+						>
+							Submit
+						</button>
+						
+						<div id="statusMessage" class="hidden rounded-md p-3 text-center"></div>
+					</form>
+				</div>
+				
+				<!-- Names List Section -->
+				<div class="border-t border-gray-200 p-6">
+					<h2 class="text-xl font-medium mb-4">Submitted Names</h2>
+					
+					{fetchError && (
+						<div class="bg-red-50 text-red-600 p-3 rounded-md mb-4">
+							{fetchError}
+						</div>
+					)}
+					
+					<ul id="namesList" class="divide-y divide-gray-200">
+						{names.length === 0 ? (
+							<li class="py-3 text-gray-500 italic">No names submitted yet</li>
+						) : (
+							names.map(({ id, name }) => (
+								<li class="py-3 flex justify-between items-center group" data-id={id}>
+									<span class="font-medium">{name}</span>
+									<div class="flex items-center gap-3">
+										<span class="text-sm text-gray-500">ID: {id}</span>
+										<button 
+											class="delete-btn text-gray-400 hover:text-red-500 focus:outline-none transition-colors p-1 rounded-full hover:bg-red-50"
+											aria-label="Delete name"
+											data-id={id}
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+												<path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+											</svg>
+										</button>
+									</div>
+								</li>
+							))
+						)}
+					</ul>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			// Wait for the DOM to be fully loaded
+			document.addEventListener('DOMContentLoaded', () => {
+				const form = document.getElementById('nameForm');
+				const nameInput = document.getElementById('nameInput');
+				const submitButton = document.getElementById('submitButton');
+				const statusMessage = document.getElementById('statusMessage');
+				
+				// Function to set status message
+				function setStatusMessage(message, type) {
+					statusMessage.textContent = message;
+					
+					// Reset classes
+					statusMessage.classList.remove('hidden', 'bg-green-50', 'text-green-700', 'bg-red-50', 'text-red-600');
+					
+					// Add appropriate classes based on type
+					if (type === 'success') {
+						statusMessage.classList.add('bg-green-50', 'text-green-700');
+					} else if (type === 'error') {
+						statusMessage.classList.add('bg-red-50', 'text-red-600');
+					}
+					
+					// Make status message visible
+					statusMessage.classList.remove('hidden');
+				}
+				
+				// Function to clear status message
+				function clearStatusMessage() {
+					statusMessage.textContent = '';
+					statusMessage.classList.add('hidden');
+				}
+				
+				// Function to set loading state
+				function setLoadingState(isLoading) {
+					if (isLoading) {
+						submitButton.disabled = true;
+						submitButton.innerHTML = '<span class="loading-spinner"></span> Submitting...';
+					} else {
+						submitButton.disabled = false;
+						submitButton.textContent = 'Submit';
+					}
+				}
+				
+				// Handle form submission
+				form.addEventListener('submit', async (e) => {
+					e.preventDefault();
+					clearStatusMessage();
+					
+					// Validate the name input
+					const name = nameInput.value.trim();
+					if (!name) {
+						setStatusMessage('Please enter your name', 'error');
+						return;
+					}
+					
+					// Set loading state
+					setLoadingState(true);
+					
+					try {
+						// Get the name value and create a JSON payload
+						const name = nameInput.value.trim();
+						
+						// Submit the data to the API as JSON
+						const response = await fetch('/api/submit-name', {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json',
+							},
+							body: JSON.stringify({ name })
+						});
+						
+						const result = await response.json();
+						
+						if (result.success) {
+							// Show success message
+							setStatusMessage(result.message || 'Name submitted successfully!', 'success');
+							// Clear the input field
+							nameInput.value = '';
+							// Refresh the names list
+							refreshNamesList();
+						} else {
+							// Show error message
+							setStatusMessage(result.message || 'An error occurred', 'error');
+						}
+					} catch (error) {
+						console.error('Error submitting form:', error);
+						setStatusMessage('An error occurred while submitting the form', 'error');
+					} finally {
+						// Reset loading state
+						setLoadingState(false);
+					}
+				});
+				
+				// Function to refresh the names list
+				async function refreshNamesList() {
+					const namesList = document.getElementById('namesList');
+					
+					// Show loading state
+					namesList.innerHTML = '<li class="py-3 text-gray-500 italic text-center">Loading names...</li>';
+					
+					try {
+						// Fetch updated names from the server
+						const response = await fetch('/api/get-names');
+						
+						if (!response.ok) {
+							throw new Error(`Server responded with ${response.status}`);
+						}
+						
+						const result = await response.json();
+						
+						if (result.success) {
+							if (result.names.length === 0) {
+								namesList.innerHTML = '<li class="py-3 text-gray-500 italic">No names submitted yet</li>';
+							} else {
+								// Update the names list
+								namesList.innerHTML = result.names.map(item => `
+									<li class="py-3 flex justify-between items-center group" data-id="${item.id}">
+										<span class="font-medium">${item.name}</span>
+										<div class="flex items-center gap-3">
+											<span class="text-sm text-gray-500">ID: ${item.id}</span>
+											<button 
+												class="delete-btn text-gray-400 hover:text-red-500 focus:outline-none transition-colors p-1 rounded-full hover:bg-red-50"
+												aria-label="Delete name"
+												data-id="${item.id}"
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+													<path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+												</svg>
+											</button>
+										</div>
+									</li>
+								`).join('');
+							}
+						} else {
+							namesList.innerHTML = `<li class="py-3 text-red-600 bg-red-50 rounded-md px-3">${result.message || 'Failed to load names'}</li>`;
+						}
+					} catch (error) {
+						console.error('Error refreshing names list:', error);
+						namesList.innerHTML = '<li class="py-3 text-red-600 bg-red-50 rounded-md px-3">Failed to refresh names list</li>';
+					}
+				}
+				
+				// Function to handle name deletion
+				async function deleteName(id) {
+					try {
+						// Find the item being deleted
+						const listItem = document.querySelector(`li[data-id="${id}"]`);
+						if (!listItem) return;
+						
+						// Show loading state
+						const deleteBtn = listItem.querySelector('.delete-btn');
+						const originalBtnContent = deleteBtn.innerHTML;
+						deleteBtn.disabled = true;
+						deleteBtn.innerHTML = `
+							<svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+							</svg>
+						`;
+						
+						// Add deleting style
+						listItem.classList.add('bg-red-50', 'opacity-60');
+						
+						// Send delete request
+						const response = await fetch('/api/delete-name', {
+							method: 'DELETE',
+							headers: {
+								'Content-Type': 'application/json',
+							},
+							body: JSON.stringify({ id }),
+						});
+						
+						const result = await response.json();
+						
+						if (result.success) {
+							// Remove the item with animation
+							listItem.classList.add('transition-all', 'duration-300', 'opacity-0', 'h-0');
+							setTimeout(() => {
+								listItem.remove();
+								
+								// Check if list is empty
+								if (namesList.children.length === 0) {
+									namesList.innerHTML = '<li class="py-3 text-gray-500 italic">No names submitted yet</li>';
+								}
+							}, 300);
+							
+							// Show success message
+							setStatusMessage(result.message || 'Name deleted successfully', 'success');
+						} else {
+							// Show error and restore the button
+							setStatusMessage(result.message || 'Failed to delete name', 'error');
+							deleteBtn.innerHTML = originalBtnContent;
+							deleteBtn.disabled = false;
+							listItem.classList.remove('bg-red-50', 'opacity-60');
+						}
+					} catch (error) {
+						console.error('Error deleting name:', error);
+						setStatusMessage('An error occurred while deleting the name', 'error');
+					}
+				}
+				
+				// Add event delegation for delete buttons
+				document.addEventListener('click', (e) => {
+					const deleteBtn = e.target.closest('.delete-btn');
+					if (!deleteBtn) return;
+					
+					const id = deleteBtn.dataset.id;
+					if (id) {
+						deleteName(id);
+					}
+				});
+			});
+		</script>
 	</body>
 </html>
